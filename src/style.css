@@ -6,8 +6,10 @@
   --frame: rgba(123, 93, 80, 0.18);
   --accent: #a9163c;
   --highlight: rgba(255, 247, 242, 0.82);
-  --copy-font-family:
-    Georgia, "Times New Roman", "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", serif;
+  --copy-font-family-en: Georgia, "Times New Roman", serif;
+  --copy-font-family-zh:
+    "Source Han Serif CN for Display", "Songti SC", "STSong", "Noto Serif SC",
+    "Source Han Serif SC", serif;
 }
 
 * {
@@ -27,7 +29,7 @@ body {
     radial-gradient(circle at top, rgba(255, 244, 233, 0.94), transparent 38%),
     linear-gradient(135deg, #d7b7aa 0%, #f2e5d6 32%, #f8f2eb 100%);
   color: var(--ink);
-  font-family: var(--copy-font-family);
+  font-family: var(--copy-font-family-en);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -117,7 +119,7 @@ body {
   z-index: 3;
   display: flex;
   align-items: flex-end;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 16px;
   pointer-events: none;
 }
@@ -306,7 +308,7 @@ body {
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid rgba(122, 89, 79, 0.12);
-  max-height: 220px;
+  max-height: 280px;
   opacity: 1;
   overflow: hidden;
   transform: translateY(0);
@@ -498,18 +500,20 @@ body {
 .credit-footer {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   flex-wrap: wrap;
-  gap: 10px;
-  max-width: min(38vw, 360px);
-  color: rgba(87, 58, 51, 0.58);
-  font-size: 11px;
-  letter-spacing: 0.11em;
+  gap: 4px 10px;
+  margin-top: 2px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(122, 89, 79, 0.1);
+  color: rgba(87, 58, 51, 0.52);
+  font-size: 9px;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  text-align: right;
+  text-align: left;
 
   a {
-    color: rgba(116, 48, 67, 0.78);
+    color: rgba(116, 48, 67, 0.68);
     text-decoration: none;
     transition:
       color 160ms ease,
@@ -527,7 +531,7 @@ body {
   top: 0;
   display: block;
   white-space: pre;
-  font-family: var(--copy-font-family);
+  font-family: var(--copy-font-family-active, var(--copy-font-family-en));
   font-size: var(--copy-font-size);
   line-height: calc(var(--copy-font-size) * var(--copy-line-height));
   letter-spacing: 0.012em;
@@ -683,21 +687,11 @@ body {
     left: 12px;
     right: 12px;
     bottom: 12px;
-    flex-direction: column;
     align-items: stretch;
-    gap: 10px;
-  }
-
-  .credit-footer {
-    order: 1;
-    align-self: flex-end;
-    max-width: min(78%, 320px);
-    gap: 6px 10px;
-    letter-spacing: 0.08em;
+    justify-content: flex-start;
   }
 
   .control-panel {
-    order: 2;
     width: 100%;
     max-width: none;
     padding: 12px;
@@ -722,6 +716,12 @@ body {
     min-width: 38px;
     padding: 5px 8px;
     letter-spacing: 0.1em;
+  }
+
+  .credit-footer {
+    gap: 4px 8px;
+    font-size: 8px;
+    letter-spacing: 0.07em;
   }
 
   .copy-surface::after {

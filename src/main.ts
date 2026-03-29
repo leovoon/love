@@ -40,6 +40,8 @@ const HEART_REST_SCALE = 1.3;
 const HEART_PULSE_MIN_SCALE = 2.4;
 const HEART_PULSE_MAX_SCALE = 3.6;
 const HEART_PULSE_DURATION_MS = 720;
+const CHINESE_FONT_STYLESHEET =
+  "https://chinese-fonts-cdn.deno.dev/packages/sypxzs/dist/%E6%80%9D%E6%BA%90%E5%B1%8F%E6%98%BE%E8%87%BB%E5%AE%8B/result.css";
 const HEART_POINTS = buildHeartPoints(180);
 const HEART_PATH = pointsToPath(HEART_POINTS, 100);
 const COPY_TEXTS: Record<CopyLanguage, string> = {
@@ -72,11 +74,6 @@ document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
         </svg>
       </div>
       <div class="surface-hud" id="surface-hud">
-        <footer class="credit-footer">
-          <a href="https://github.com/leovoon/love" target="_blank" rel="noreferrer">github/leovoon/love</a>
-          <span>with thanks to</span>
-          <a href="https://github.com/chenglou/pretext" target="_blank" rel="noreferrer">Pretext</a>
-        </footer>
         <form class="control-panel" id="control-panel" aria-label="Display controls">
           <div class="control-panel-head">
             <button
@@ -102,7 +99,7 @@ document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
           <div class="control-panel-body" id="control-panel-body">
             <label class="control-toggle" for="auto-play">
               <span class="control-copy">
-                <span class="control-name">Auto</span>
+                <span class="control-name">Animation</span>
                 <span class="control-value" id="auto-play-value">Off</span>
               </span>
               <span class="toggle-shell">
@@ -126,6 +123,11 @@ document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
               </span>
               <input id="heart-scale" name="heart-scale" type="range" min="70" max="150" value="100" />
             </label>
+            <footer class="credit-footer">
+              <a href="https://github.com/leovoon/love" target="_blank" rel="noreferrer">github/leovoon/love</a>
+              <span>with thanks to</span>
+              <a href="https://github.com/chenglou/pretext" target="_blank" rel="noreferrer">Pretext</a>
+            </footer>
           </div>
         </form>
       </div>
@@ -146,7 +148,6 @@ const pointerGuideLine = document.querySelector<SVGLineElement>("#pointer-guide-
 const controlPanel = document.querySelector<HTMLFormElement>("#control-panel")!;
 const controlPanelToggle = document.querySelector<HTMLButtonElement>("#control-panel-toggle")!;
 const controlPanelBody = document.querySelector<HTMLDivElement>("#control-panel-body")!;
-const creditFooter = document.querySelector<HTMLElement>(".credit-footer")!;
 const languageButtons = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-language]"));
 const autoPlayInput = document.querySelector<HTMLInputElement>("#auto-play")!;
 const fontScaleInput = document.querySelector<HTMLInputElement>("#font-scale")!;
@@ -253,6 +254,27 @@ function updateLanguageToggle(): void {
     button.classList.toggle("is-active", isActive);
     button.setAttribute("aria-pressed", String(isActive));
   }
+}
+
+function ensureChineseFontStylesheet(): void {
+  const existingLink = document.querySelector<HTMLLinkElement>(
+    'link[data-chinese-font="source-han-serif-display"]',
+  );
+  if (existingLink !== null) return;
+
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = CHINESE_FONT_STYLESHEET;
+  link.dataset.chineseFont = "source-han-serif-display";
+  link.addEventListener(
+    "load",
+    () => {
+      state.font = "";
+      scheduleRender();
+    },
+    { once: true },
+  );
+  document.head.append(link);
 }
 
 function syncControlPanelState(): void {
@@ -618,6 +640,7 @@ function renderPointerGuide(): void {
 function updateMetrics(): void {
   const width = surface.clientWidth;
   const height = getViewportHeight();
+  const rootStyles = getComputedStyle(document.documentElement);
   const baseFontSize = clamp(width * 0.018, 15, 21);
   const fontSize = clamp(baseFontSize * state.fontScale, 12, 34);
   const lineHeight = getCopyLineHeight(fontSize);
@@ -632,13 +655,19 @@ function updateMetrics(): void {
   const baseHeartSize = clamp(Math.min(width * 0.14, height * 0.18), 68, 128);
   const heartSize = clamp(baseHeartSize * state.heartScale, 52, 188);
   const heartFootprintSize = Math.round(heartSize * state.wrapScale);
+  if (state.copyLanguage === "zh") {
+    ensureChineseFontStylesheet();
+  }
+
+  const fontFamilyVar =
+    state.copyLanguage === "zh" ? "--copy-font-family-zh" : "--copy-font-family-en";
   const fontFamily =
-    getComputedStyle(document.documentElement).getPropertyValue("--copy-font-family").trim() ||
-    'Georgia, "Times New Roman", serif';
+    rootStyles.getPropertyValue(fontFamilyVar).trim() || 'Georgia, "Times New Roman", serif';
   const font = `400 ${fontSize}px ${fontFamily}`;
   const activeCopy = COPY_TEXTS[state.copyLanguage];
 
   surface.style.setProperty("--copy-font-size", `${fontSize}px`);
+  surface.style.setProperty("--copy-font-family-active", fontFamily);
 
   if (font !== state.font || state.preparedLanguage !== state.copyLanguage) {
     state.font = font;
@@ -986,10 +1015,6 @@ new ResizeObserver(() => {
 new ResizeObserver(() => {
   scheduleRender();
 }).observe(surfaceHud);
-
-new ResizeObserver(() => {
-  scheduleRender();
-}).observe(creditFooter);
 
 window.addEventListener(
   "pointermove",
