@@ -163,6 +163,7 @@ const state = {
   lineHeight: 0,
   fontSize: 0,
   textBounds: { x: 0, y: 0, width: 0, height: 0 } as Rect,
+  contentHeight: 0,
   heartSize: 0,
   heartFootprintSize: 0,
   autoPlay: false,
@@ -516,7 +517,8 @@ function getMovementBounds(
   const minX = textBounds.x + heartFootprintSize / 2;
   const maxX = Math.max(minX, textBounds.x + textBounds.width - heartFootprintSize / 2);
   const minY = textBounds.y + heartFootprintSize / 2;
-  const maxY = Math.max(minY, textBounds.y + textBounds.height - heartFootprintSize / 2);
+  const contentHeight = Math.max(textBounds.y + textBounds.height, state.contentHeight);
+  const maxY = Math.max(minY, contentHeight - heartFootprintSize / 2);
 
   return { minX, maxX, minY, maxY };
 }
@@ -788,6 +790,7 @@ function render(): void {
   const hudSafeSpace =
     hudMetrics.height + hudMetrics.bottomInset + clamp(state.lineHeight * 1.1, 28, 56);
   const copyHeight = Math.max(getViewportHeight(), layout.contentBottom + hudSafeSpace);
+  state.contentHeight = copyHeight;
 
   for (let index = 0; index < layout.fragments.length; index += 1) {
     const fragment = layout.fragments[index]!;
