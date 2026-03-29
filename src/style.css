@@ -6,6 +6,8 @@
   --frame: rgba(123, 93, 80, 0.18);
   --accent: #a9163c;
   --highlight: rgba(255, 247, 242, 0.82);
+  --copy-font-family:
+    Georgia, "Times New Roman", "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", serif;
 }
 
 * {
@@ -19,12 +21,13 @@ body {
 
 body {
   margin: 0;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   background:
     radial-gradient(circle at top, rgba(255, 244, 233, 0.94), transparent 38%),
     linear-gradient(135deg, #d7b7aa 0%, #f2e5d6 32%, #f8f2eb 100%);
   color: var(--ink);
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--copy-font-family);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -99,17 +102,18 @@ body {
 }
 
 .copy-layer {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  min-height: 100%;
   color: var(--ink);
   isolation: isolate;
+  pointer-events: none;
 }
 
 .surface-hud {
-  position: absolute;
-  left: clamp(16px, 2.2vw, 28px);
-  right: clamp(16px, 2.2vw, 28px);
-  bottom: clamp(16px, 2.4vw, 30px);
+  position: fixed;
+  left: var(--hud-left, 28px);
+  right: var(--hud-right, 28px);
+  bottom: var(--hud-bottom, 24px);
   z-index: 3;
   display: flex;
   align-items: flex-end;
@@ -167,8 +171,7 @@ body {
   gap: 2px;
 }
 
-.control-panel-kicker,
-.control-panel-state {
+.control-panel-kicker {
   font-size: 10px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -187,10 +190,6 @@ body {
 
 .control-panel-meta {
   justify-items: end;
-}
-
-.control-panel-state {
-  color: var(--accent);
 }
 
 .control-panel-icon {
@@ -452,6 +451,7 @@ body {
   top: 0;
   display: block;
   white-space: pre;
+  font-family: var(--copy-font-family);
   font-size: var(--copy-font-size);
   line-height: calc(var(--copy-font-size) * var(--copy-line-height));
   letter-spacing: 0.012em;

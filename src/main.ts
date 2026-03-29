@@ -39,7 +39,7 @@ const HEART_PULSE_MAX_SCALE = 3.6;
 const HEART_PULSE_DURATION_MS = 720;
 const HEART_POINTS = buildHeartPoints(180);
 const HEART_PATH = pointsToPath(HEART_POINTS, 100);
-const COPY_TEXT = backgroundText.replace(/\s+/g, " ").trim();
+const COPY_TEXT = backgroundText.replace(/[\r\n]+/g, "").trim();
 
 document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
   <main class="composition">
@@ -83,9 +83,8 @@ document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
               <span class="control-panel-kicker">Display</span>
               <span class="control-panel-title">Controls</span>
             </span>
-            <span class="control-panel-meta">
-              <span class="control-panel-state" id="control-panel-state">Open</span>
-              <span class="control-panel-icon" aria-hidden="true"></span>
+            <span class="control-panel-meta" aria-hidden="true">
+              <span class="control-panel-icon"></span>
             </span>
           </button>
           <div class="control-panel-body" id="control-panel-body">
@@ -122,6 +121,7 @@ document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
   </main>
 `;
 
+const composition = document.querySelector<HTMLElement>(".composition")!;
 const surface = document.querySelector<HTMLDivElement>("#copy-surface")!;
 const copyLayer = document.querySelector<HTMLDivElement>("#copy-layer")!;
 const heartShell = document.querySelector<HTMLDivElement>("#heart-shell")!;
@@ -129,7 +129,6 @@ const surfaceHud = document.querySelector<HTMLDivElement>("#surface-hud")!;
 const controlPanel = document.querySelector<HTMLFormElement>("#control-panel")!;
 const controlPanelToggle = document.querySelector<HTMLButtonElement>("#control-panel-toggle")!;
 const controlPanelBody = document.querySelector<HTMLDivElement>("#control-panel-body")!;
-const controlPanelState = document.querySelector<HTMLSpanElement>("#control-panel-state")!;
 const creditFooter = document.querySelector<HTMLElement>(".credit-footer")!;
 const autoPlayInput = document.querySelector<HTMLInputElement>("#auto-play")!;
 const fontScaleInput = document.querySelector<HTMLInputElement>("#font-scale")!;
@@ -216,7 +215,10 @@ function updateControlLabels(): void {
 function syncControlPanelState(): void {
   controlPanel.classList.toggle("is-collapsed", state.controlsCollapsed);
   controlPanelToggle.setAttribute("aria-expanded", String(!state.controlsCollapsed));
-  controlPanelState.textContent = state.controlsCollapsed ? "Open" : "Close";
+  controlPanelToggle.setAttribute(
+    "aria-label",
+    state.controlsCollapsed ? "Show display controls" : "Hide display controls",
+  );
   controlPanelBody.setAttribute("aria-hidden", String(state.controlsCollapsed));
   controlPanelBody.inert = state.controlsCollapsed;
 }
@@ -454,36 +456,54 @@ function getMovementBounds(
   return { minX, maxX, minY, maxY };
 }
 
-function getHudTopOffset(): number {
+function getViewportHeight(): number {
+  const compositionStyles = getComputedStyle(composition);
+  const compositionPaddingTop = Number.parseFloat(compositionStyles.paddingTop) || 0;
+  const compositionPaddingBottom = Number.parseFloat(compositionStyles.paddingBottom) || 0;
+
+  return Math.max(window.innerHeight - compositionPaddingTop - compositionPaddingBottom, 320);
+}
+
+function positionHud(): { bottomInset: number; height: number } {
   const surfaceRect = surface.getBoundingClientRect();
-  const hudRect = surfaceHud.getBoundingClientRect();
-  return clamp(hudRect.top - surfaceRect.top, 0, surface.clientHeight);
+  const isNarrow = window.matchMedia("(max-width: 720px)").matches;
+  const horizontalInset = isNarrow ? 12 : clamp(surface.clientWidth * 0.022, 16, 28);
+  const bottomInset = isNarrow ? 12 : clamp(window.innerHeight * 0.024, 16, 30);
+
+  surfaceHud.style.setProperty("--hud-left", `${Math.round(surfaceRect.left + horizontalInset)}px`);
+  surfaceHud.style.setProperty(
+    "--hud-right",
+    `${Math.round(window.innerWidth - surfaceRect.right + horizontalInset)}px`,
+  );
+  surfaceHud.style.setProperty("--hud-bottom", `${Math.round(bottomInset)}px`);
+
+  return {
+    bottomInset,
+    height: surfaceHud.getBoundingClientRect().height,
+  };
 }
 
 function updateMetrics(): void {
   const width = surface.clientWidth;
-  const height = surface.clientHeight;
+  const height = getViewportHeight();
   const baseFontSize = clamp(width * 0.018, 15, 21);
   const fontSize = clamp(baseFontSize * state.fontScale, 12, 34);
   const lineHeight = getCopyLineHeight(fontSize);
   const paddingX = clamp(width * 0.07, 24, 88);
   const paddingY = clamp(height * 0.08, 28, 72);
-  const overlayGap = Math.max(lineHeight * 0.95, clamp(height * 0.024, 18, 28));
-  const overlayTop = getHudTopOffset();
-  const textBottom = Math.max(
-    paddingY + lineHeight * 5,
-    Math.min(height - paddingY, overlayTop - overlayGap),
-  );
   const textBounds = {
     x: paddingX,
     y: paddingY,
     width: width - paddingX * 2,
-    height: Math.max(lineHeight * 5, textBottom - paddingY),
+    height: Math.max(lineHeight * 5, height - paddingY * 2),
   };
   const baseHeartSize = clamp(Math.min(width * 0.14, height * 0.18), 68, 128);
   const heartSize = clamp(baseHeartSize * state.heartScale, 52, 188);
   const heartFootprintSize = Math.round(heartSize * state.wrapScale);
-  const font = `400 ${fontSize}px Georgia`;
+  const fontFamily =
+    getComputedStyle(document.documentElement).getPropertyValue("--copy-font-family").trim() ||
+    'Georgia, "Times New Roman", serif';
+  const font = `400 ${fontSize}px ${fontFamily}`;
 
   surface.style.setProperty("--copy-font-size", `${fontSize}px`);
 
@@ -508,8 +528,10 @@ function updateMetrics(): void {
   state.heartY = clamp(state.heartY, bounds.minY, bounds.maxY);
 }
 
-function layoutFragments(): TextFragment[] {
-  if (state.prepared === null) return [];
+function layoutFragments(): { fragments: TextFragment[]; contentBottom: number } {
+  if (state.prepared === null) {
+    return { fragments: [], contentBottom: state.textBounds.y };
+  }
 
   const fragments: TextFragment[] = [];
   const cursor: LayoutCursor = { segmentIndex: 0, graphemeIndex: 0 };
@@ -522,9 +544,9 @@ function layoutFragments(): TextFragment[] {
   const heartPolygon = transformPoints(HEART_POINTS, heartRect);
   const horizontalPadding = Math.max(10, state.fontSize * 0.7);
   const verticalPadding = Math.max(6, state.fontSize * 0.22);
-  const maxY = state.textBounds.y + state.textBounds.height;
+  let contentBottom = state.textBounds.y;
 
-  for (let bandTop = state.textBounds.y; bandTop < maxY; bandTop += state.lineHeight) {
+  for (let bandTop = state.textBounds.y; ; bandTop += state.lineHeight) {
     const baseSlot = {
       left: state.textBounds.x,
       right: state.textBounds.x + state.textBounds.width,
@@ -549,16 +571,17 @@ function layoutFragments(): TextFragment[] {
       const line = layoutNextLine(state.prepared, cursor, slot.right - slot.left);
 
       if (line === null) {
-        return fragments;
+        return { fragments, contentBottom };
       }
 
       if (cursorsEqual(cursor, line.end)) {
-        return fragments;
+        return { fragments, contentBottom };
       }
 
       cursor.segmentIndex = line.end.segmentIndex;
       cursor.graphemeIndex = line.end.graphemeIndex;
       consumedLine = true;
+      contentBottom = bandTop + state.lineHeight;
 
       if (line.text.length > 0) {
         fragments.push({
@@ -579,11 +602,12 @@ function layoutFragments(): TextFragment[] {
     }
   }
 
-  return fragments;
+  return { fragments, contentBottom };
 }
 
 function render(): void {
   updateMetrics();
+  const hudMetrics = positionHud();
 
   surface.style.setProperty("--heart-center-x", `${state.heartX}px`);
   surface.style.setProperty("--heart-center-y", `${state.heartY}px`);
@@ -597,10 +621,13 @@ function render(): void {
   );
 
   const fragmentRoot = document.createDocumentFragment();
-  const fragments = layoutFragments();
+  const layout = layoutFragments();
+  const hudSafeSpace =
+    hudMetrics.height + hudMetrics.bottomInset + clamp(state.lineHeight * 1.1, 28, 56);
+  const copyHeight = Math.max(getViewportHeight(), layout.contentBottom + hudSafeSpace);
 
-  for (let index = 0; index < fragments.length; index += 1) {
-    const fragment = fragments[index]!;
+  for (let index = 0; index < layout.fragments.length; index += 1) {
+    const fragment = layout.fragments[index]!;
     const element = document.createElement("span");
     element.className = "copy-fragment";
     element.textContent = fragment.text;
@@ -610,6 +637,7 @@ function render(): void {
   }
 
   copyLayer.replaceChildren(fragmentRoot);
+  copyLayer.style.height = `${Math.ceil(copyHeight)}px`;
   heartShell.style.width = `${state.heartSize}px`;
   heartShell.style.height = `${state.heartSize}px`;
   heartShell.style.setProperty("--heart-footprint-size", `${state.heartFootprintSize}px`);
