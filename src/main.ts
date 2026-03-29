@@ -5,8 +5,11 @@ import {
   type LayoutLine,
   type PreparedTextWithSegments,
 } from "@chenglou/pretext";
-import backgroundText from "../background-text.txt?raw";
+import backgroundTextEn from "../background-text.en.txt?raw";
+import backgroundTextZh from "../background-text.txt?raw";
 import "./style.css";
+
+type CopyLanguage = "en" | "zh";
 
 type Point = {
   x: number;
@@ -39,7 +42,10 @@ const HEART_PULSE_MAX_SCALE = 3.6;
 const HEART_PULSE_DURATION_MS = 720;
 const HEART_POINTS = buildHeartPoints(180);
 const HEART_PATH = pointsToPath(HEART_POINTS, 100);
-const COPY_TEXT = backgroundText.replace(/[\r\n]+/g, "").trim();
+const COPY_TEXTS: Record<CopyLanguage, string> = {
+  en: normalizeCopyText(backgroundTextEn, "en"),
+  zh: normalizeCopyText(backgroundTextZh, "zh"),
+};
 
 document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
   <main class="composition">
@@ -72,21 +78,27 @@ document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
           <a href="https://github.com/chenglou/pretext" target="_blank" rel="noreferrer">Pretext</a>
         </footer>
         <form class="control-panel" id="control-panel" aria-label="Display controls">
-          <button
-            class="control-panel-toggle"
-            id="control-panel-toggle"
-            type="button"
-            aria-expanded="true"
-            aria-controls="control-panel-body"
-          >
-            <span class="control-panel-copy">
-              <span class="control-panel-kicker">Display</span>
-              <span class="control-panel-title">Controls</span>
-            </span>
-            <span class="control-panel-meta" aria-hidden="true">
-              <span class="control-panel-icon"></span>
-            </span>
-          </button>
+          <div class="control-panel-head">
+            <button
+              class="control-panel-toggle"
+              id="control-panel-toggle"
+              type="button"
+              aria-expanded="true"
+              aria-controls="control-panel-body"
+            >
+              <span class="control-panel-copy">
+                <span class="control-panel-kicker">Display</span>
+                <span class="control-panel-title">Controls</span>
+              </span>
+              <span class="control-panel-meta" aria-hidden="true">
+                <span class="control-panel-icon"></span>
+              </span>
+            </button>
+            <div class="language-toggle" id="language-toggle" role="group" aria-label="Background text language">
+              <button class="language-button" type="button" data-language="en">EN</button>
+              <button class="language-button" type="button" data-language="zh">中文</button>
+            </div>
+          </div>
           <div class="control-panel-body" id="control-panel-body">
             <label class="control-toggle" for="auto-play">
               <span class="control-copy">
@@ -117,6 +129,9 @@ document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
           </div>
         </form>
       </div>
+      <svg class="pointer-guide" id="pointer-guide" aria-hidden="true">
+        <line class="pointer-guide-line" id="pointer-guide-line" />
+      </svg>
     </section>
   </main>
 `;
@@ -126,10 +141,13 @@ const surface = document.querySelector<HTMLDivElement>("#copy-surface")!;
 const copyLayer = document.querySelector<HTMLDivElement>("#copy-layer")!;
 const heartShell = document.querySelector<HTMLDivElement>("#heart-shell")!;
 const surfaceHud = document.querySelector<HTMLDivElement>("#surface-hud")!;
+const pointerGuide = document.querySelector<SVGSVGElement>("#pointer-guide")!;
+const pointerGuideLine = document.querySelector<SVGLineElement>("#pointer-guide-line")!;
 const controlPanel = document.querySelector<HTMLFormElement>("#control-panel")!;
 const controlPanelToggle = document.querySelector<HTMLButtonElement>("#control-panel-toggle")!;
 const controlPanelBody = document.querySelector<HTMLDivElement>("#control-panel-body")!;
 const creditFooter = document.querySelector<HTMLElement>(".credit-footer")!;
+const languageButtons = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-language]"));
 const autoPlayInput = document.querySelector<HTMLInputElement>("#auto-play")!;
 const fontScaleInput = document.querySelector<HTMLInputElement>("#font-scale")!;
 const heartScaleInput = document.querySelector<HTMLInputElement>("#heart-scale")!;
@@ -139,6 +157,7 @@ const heartScaleValue = document.querySelector<HTMLSpanElement>("#heart-scale-va
 
 const state = {
   prepared: null as PreparedTextWithSegments | null,
+  preparedLanguage: "zh" as CopyLanguage,
   font: "",
   lineHeight: 0,
   fontSize: 0,
@@ -152,6 +171,7 @@ const state = {
   autoVelocityY: 112,
   fontScale: 1,
   heartScale: 1,
+  copyLanguage: "zh" as CopyLanguage,
   controlsCollapsed: false,
   wrapScale: HEART_REST_SCALE,
   currentPulseScale: 3,
@@ -163,6 +183,9 @@ const state = {
   pointerStartX: 0,
   pointerStartY: 0,
   pointerMoved: false,
+  pointerX: 0,
+  pointerY: 0,
+  pointerInsideViewport: false,
   wrapAnimationId: 0,
   wrapAnimationStart: 0,
   wrapAnimationFrom: HEART_REST_SCALE,
@@ -206,10 +229,30 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
+function normalizeCopyText(rawText: string, language: CopyLanguage): string {
+  if (language === "en") {
+    return rawText
+      .replace(/\s*\n+\s*/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  return rawText.replace(/[\r\n]+/g, "").trim();
+}
+
 function updateControlLabels(): void {
   autoPlayValue.textContent = state.autoPlay ? "On" : "Off";
   fontScaleValue.textContent = `${Math.round(state.fontScale * 100)}%`;
   heartScaleValue.textContent = `${Math.round(state.heartScale * 100)}%`;
+}
+
+function updateLanguageToggle(): void {
+  for (let index = 0; index < languageButtons.length; index += 1) {
+    const button = languageButtons[index]!;
+    const isActive = button.dataset.language === state.copyLanguage;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  }
 }
 
 function syncControlPanelState(): void {
@@ -483,6 +526,95 @@ function positionHud(): { bottomInset: number; height: number } {
   };
 }
 
+function hidePointerGuide(): void {
+  pointerGuide.classList.remove("is-visible");
+}
+
+function getViewportBoundaryPoint(from: Point, to: Point): Point | null {
+  const deltaX = to.x - from.x;
+  const deltaY = to.y - from.y;
+
+  if (deltaX === 0 && deltaY === 0) return null;
+
+  const candidates: Point[] = [];
+
+  const intersections = [
+    { x: 0, y: from.y + ((0 - from.x) * deltaY) / deltaX },
+    {
+      x: window.innerWidth,
+      y: from.y + ((window.innerWidth - from.x) * deltaY) / deltaX,
+    },
+    { y: 0, x: from.x + ((0 - from.y) * deltaX) / deltaY },
+    {
+      y: window.innerHeight,
+      x: from.x + ((window.innerHeight - from.y) * deltaX) / deltaY,
+    },
+  ];
+
+  for (let index = 0; index < intersections.length; index += 1) {
+    const point = intersections[index]!;
+    if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) continue;
+    const isInsideViewport =
+      point.x >= 0 && point.x <= window.innerWidth && point.y >= 0 && point.y <= window.innerHeight;
+    const isForward =
+      (deltaX === 0 || Math.sign(point.x - from.x) === Math.sign(deltaX)) &&
+      (deltaY === 0 || Math.sign(point.y - from.y) === Math.sign(deltaY));
+
+    if (isInsideViewport && isForward) {
+      candidates.push({ x: point.x, y: point.y });
+    }
+  }
+
+  if (candidates.length === 0) return null;
+
+  return candidates.reduce((closest, candidate) => {
+    const closestDistance = Math.hypot(closest.x - from.x, closest.y - from.y);
+    const candidateDistance = Math.hypot(candidate.x - from.x, candidate.y - from.y);
+    return candidateDistance < closestDistance ? candidate : closest;
+  });
+}
+
+function renderPointerGuide(): void {
+  if (!state.pointerInsideViewport) {
+    hidePointerGuide();
+    return;
+  }
+
+  const heartRect = heartShell.getBoundingClientRect();
+  const isHeartVisible =
+    heartRect.bottom >= 0 &&
+    heartRect.top <= window.innerHeight &&
+    heartRect.right >= 0 &&
+    heartRect.left <= window.innerWidth;
+
+  if (isHeartVisible) {
+    hidePointerGuide();
+    return;
+  }
+
+  const cursor = {
+    x: clamp(state.pointerX, 0, window.innerWidth),
+    y: clamp(state.pointerY, 0, window.innerHeight),
+  };
+  const heartCenter = {
+    x: heartRect.left + heartRect.width / 2,
+    y: heartRect.top + heartRect.height / 2,
+  };
+  const boundaryPoint = getViewportBoundaryPoint(cursor, heartCenter);
+
+  if (boundaryPoint === null) {
+    hidePointerGuide();
+    return;
+  }
+
+  pointerGuide.setAttribute("viewBox", `0 0 ${window.innerWidth} ${window.innerHeight}`);
+  pointerGuideLine.setAttribute("x1", cursor.x.toFixed(2));
+  pointerGuideLine.setAttribute("y1", cursor.y.toFixed(2));
+  pointerGuideLine.setAttribute("x2", boundaryPoint.x.toFixed(2));
+  pointerGuideLine.setAttribute("y2", boundaryPoint.y.toFixed(2));
+  pointerGuide.classList.add("is-visible");
+}
+
 function updateMetrics(): void {
   const width = surface.clientWidth;
   const height = getViewportHeight();
@@ -504,12 +636,14 @@ function updateMetrics(): void {
     getComputedStyle(document.documentElement).getPropertyValue("--copy-font-family").trim() ||
     'Georgia, "Times New Roman", serif';
   const font = `400 ${fontSize}px ${fontFamily}`;
+  const activeCopy = COPY_TEXTS[state.copyLanguage];
 
   surface.style.setProperty("--copy-font-size", `${fontSize}px`);
 
-  if (font !== state.font) {
+  if (font !== state.font || state.preparedLanguage !== state.copyLanguage) {
     state.font = font;
-    state.prepared = prepareWithSegments(COPY_TEXT, font);
+    state.prepared = prepareWithSegments(activeCopy, font);
+    state.preparedLanguage = state.copyLanguage;
   }
 
   state.fontSize = fontSize;
@@ -642,6 +776,7 @@ function render(): void {
   heartShell.style.height = `${state.heartSize}px`;
   heartShell.style.setProperty("--heart-footprint-size", `${state.heartFootprintSize}px`);
   heartShell.style.transform = `translate(${state.heartX - state.heartSize / 2}px, ${state.heartY - state.heartSize / 2}px)`;
+  renderPointerGuide();
 }
 
 function scheduleRender(): void {
@@ -814,6 +949,18 @@ controlPanelToggle.addEventListener("click", () => {
   scheduleRender();
 });
 
+for (let index = 0; index < languageButtons.length; index += 1) {
+  const button = languageButtons[index]!;
+  button.addEventListener("click", () => {
+    const nextLanguage = button.dataset.language as CopyLanguage | undefined;
+    if (nextLanguage === undefined || nextLanguage === state.copyLanguage) return;
+
+    state.copyLanguage = nextLanguage;
+    updateLanguageToggle();
+    scheduleRender();
+  });
+}
+
 autoPlayInput.addEventListener("change", () => {
   state.autoPlay = autoPlayInput.checked;
   updateControlLabels();
@@ -829,6 +976,7 @@ state.fontScale = Number.parseInt(fontScaleInput.value, 10) / 100;
 state.heartScale = Number.parseInt(heartScaleInput.value, 10) / 100;
 state.controlsCollapsed = window.matchMedia("(max-width: 720px)").matches;
 updateControlLabels();
+updateLanguageToggle();
 syncControlPanelState();
 
 new ResizeObserver(() => {
@@ -842,6 +990,51 @@ new ResizeObserver(() => {
 new ResizeObserver(() => {
   scheduleRender();
 }).observe(creditFooter);
+
+window.addEventListener(
+  "pointermove",
+  (event) => {
+    if (event.pointerType === "touch") {
+      state.pointerInsideViewport = false;
+      hidePointerGuide();
+      return;
+    }
+
+    state.pointerX = event.clientX;
+    state.pointerY = event.clientY;
+    state.pointerInsideViewport = true;
+    renderPointerGuide();
+  },
+  { passive: true },
+);
+
+window.addEventListener(
+  "pointerdown",
+  (event) => {
+    if (event.pointerType !== "touch") return;
+    state.pointerInsideViewport = false;
+    hidePointerGuide();
+  },
+  { passive: true },
+);
+
+window.addEventListener("pointerleave", () => {
+  state.pointerInsideViewport = false;
+  hidePointerGuide();
+});
+
+window.addEventListener(
+  "scroll",
+  () => {
+    renderPointerGuide();
+  },
+  { passive: true },
+);
+
+window.addEventListener("resize", () => {
+  scheduleRender();
+  renderPointerGuide();
+});
 
 if ("fonts" in document) {
   void document.fonts.ready.then(() => {
