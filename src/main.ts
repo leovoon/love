@@ -45,34 +45,6 @@ document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
   <main class="composition">
     <section class="copy-surface" id="copy-surface" aria-label="Background text wrapped around a draggable heart">
       <div class="copy-layer" id="copy-layer" aria-hidden="true"></div>
-      <form class="control-panel" id="control-panel" aria-label="Display controls">
-        <label class="control-toggle" for="auto-play">
-          <span class="control-copy">
-            <span class="control-name">Auto</span>
-            <span class="control-value" id="auto-play-value">Off</span>
-          </span>
-          <span class="toggle-shell">
-            <input class="toggle-input" id="auto-play" name="auto-play" type="checkbox" />
-            <span class="toggle-track" aria-hidden="true">
-              <span class="toggle-thumb"></span>
-            </span>
-          </span>
-        </label>
-        <label class="control-row" for="font-scale">
-          <span class="control-copy">
-            <span class="control-name">Font</span>
-            <span class="control-value" id="font-scale-value">100%</span>
-          </span>
-          <input id="font-scale" name="font-scale" type="range" min="75" max="145" value="100" />
-        </label>
-        <label class="control-row" for="heart-scale">
-          <span class="control-copy">
-            <span class="control-name">Heart</span>
-            <span class="control-value" id="heart-scale-value">100%</span>
-          </span>
-          <input id="heart-scale" name="heart-scale" type="range" min="70" max="150" value="100" />
-        </label>
-      </form>
       <div
         class="heart-shell"
         id="heart-shell"
@@ -93,11 +65,59 @@ document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
           <path class="heart-shine" d="${HEART_PATH}" />
         </svg>
       </div>
-      <footer class="credit-footer">
-        <a href="https://github.com/leovoon/love" target="_blank" rel="noreferrer">github/leovoon/love</a>
-        <span>with thanks to</span>
-        <a href="https://github.com/chenglou/pretext" target="_blank" rel="noreferrer">Pretext</a>
-      </footer>
+      <div class="surface-hud" id="surface-hud">
+        <footer class="credit-footer">
+          <a href="https://github.com/leovoon/love" target="_blank" rel="noreferrer">github/leovoon/love</a>
+          <span>with thanks to</span>
+          <a href="https://github.com/chenglou/pretext" target="_blank" rel="noreferrer">Pretext</a>
+        </footer>
+        <form class="control-panel" id="control-panel" aria-label="Display controls">
+          <button
+            class="control-panel-toggle"
+            id="control-panel-toggle"
+            type="button"
+            aria-expanded="true"
+            aria-controls="control-panel-body"
+          >
+            <span class="control-panel-copy">
+              <span class="control-panel-kicker">Display</span>
+              <span class="control-panel-title">Controls</span>
+            </span>
+            <span class="control-panel-meta">
+              <span class="control-panel-state" id="control-panel-state">Open</span>
+              <span class="control-panel-icon" aria-hidden="true"></span>
+            </span>
+          </button>
+          <div class="control-panel-body" id="control-panel-body">
+            <label class="control-toggle" for="auto-play">
+              <span class="control-copy">
+                <span class="control-name">Auto</span>
+                <span class="control-value" id="auto-play-value">Off</span>
+              </span>
+              <span class="toggle-shell">
+                <input class="toggle-input" id="auto-play" name="auto-play" type="checkbox" />
+                <span class="toggle-track" aria-hidden="true">
+                  <span class="toggle-thumb"></span>
+                </span>
+              </span>
+            </label>
+            <label class="control-row" for="font-scale">
+              <span class="control-copy">
+                <span class="control-name">Font</span>
+                <span class="control-value" id="font-scale-value">100%</span>
+              </span>
+              <input id="font-scale" name="font-scale" type="range" min="75" max="145" value="100" />
+            </label>
+            <label class="control-row" for="heart-scale">
+              <span class="control-copy">
+                <span class="control-name">Heart</span>
+                <span class="control-value" id="heart-scale-value">100%</span>
+              </span>
+              <input id="heart-scale" name="heart-scale" type="range" min="70" max="150" value="100" />
+            </label>
+          </div>
+        </form>
+      </div>
     </section>
   </main>
 `;
@@ -105,6 +125,12 @@ document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
 const surface = document.querySelector<HTMLDivElement>("#copy-surface")!;
 const copyLayer = document.querySelector<HTMLDivElement>("#copy-layer")!;
 const heartShell = document.querySelector<HTMLDivElement>("#heart-shell")!;
+const surfaceHud = document.querySelector<HTMLDivElement>("#surface-hud")!;
+const controlPanel = document.querySelector<HTMLFormElement>("#control-panel")!;
+const controlPanelToggle = document.querySelector<HTMLButtonElement>("#control-panel-toggle")!;
+const controlPanelBody = document.querySelector<HTMLDivElement>("#control-panel-body")!;
+const controlPanelState = document.querySelector<HTMLSpanElement>("#control-panel-state")!;
+const creditFooter = document.querySelector<HTMLElement>(".credit-footer")!;
 const autoPlayInput = document.querySelector<HTMLInputElement>("#auto-play")!;
 const fontScaleInput = document.querySelector<HTMLInputElement>("#font-scale")!;
 const heartScaleInput = document.querySelector<HTMLInputElement>("#heart-scale")!;
@@ -127,6 +153,7 @@ const state = {
   autoVelocityY: 112,
   fontScale: 1,
   heartScale: 1,
+  controlsCollapsed: false,
   wrapScale: HEART_REST_SCALE,
   currentPulseScale: 3,
   heartX: 0,
@@ -184,6 +211,14 @@ function updateControlLabels(): void {
   autoPlayValue.textContent = state.autoPlay ? "On" : "Off";
   fontScaleValue.textContent = `${Math.round(state.fontScale * 100)}%`;
   heartScaleValue.textContent = `${Math.round(state.heartScale * 100)}%`;
+}
+
+function syncControlPanelState(): void {
+  controlPanel.classList.toggle("is-collapsed", state.controlsCollapsed);
+  controlPanelToggle.setAttribute("aria-expanded", String(!state.controlsCollapsed));
+  controlPanelState.textContent = state.controlsCollapsed ? "Open" : "Close";
+  controlPanelBody.setAttribute("aria-hidden", String(state.controlsCollapsed));
+  controlPanelBody.inert = state.controlsCollapsed;
 }
 
 function randomBetween(min: number, max: number): number {
@@ -419,6 +454,12 @@ function getMovementBounds(
   return { minX, maxX, minY, maxY };
 }
 
+function getHudTopOffset(): number {
+  const surfaceRect = surface.getBoundingClientRect();
+  const hudRect = surfaceHud.getBoundingClientRect();
+  return clamp(hudRect.top - surfaceRect.top, 0, surface.clientHeight);
+}
+
 function updateMetrics(): void {
   const width = surface.clientWidth;
   const height = surface.clientHeight;
@@ -427,11 +468,17 @@ function updateMetrics(): void {
   const lineHeight = getCopyLineHeight(fontSize);
   const paddingX = clamp(width * 0.07, 24, 88);
   const paddingY = clamp(height * 0.08, 28, 72);
+  const overlayGap = Math.max(lineHeight * 0.95, clamp(height * 0.024, 18, 28));
+  const overlayTop = getHudTopOffset();
+  const textBottom = Math.max(
+    paddingY + lineHeight * 5,
+    Math.min(height - paddingY, overlayTop - overlayGap),
+  );
   const textBounds = {
     x: paddingX,
     y: paddingY,
     width: width - paddingX * 2,
-    height: height - paddingY * 2,
+    height: Math.max(lineHeight * 5, textBottom - paddingY),
   };
   const baseHeartSize = clamp(Math.min(width * 0.14, height * 0.18), 68, 128);
   const heartSize = clamp(baseHeartSize * state.heartScale, 52, 188);
@@ -733,6 +780,12 @@ heartScaleInput.addEventListener("input", () => {
   scheduleRender();
 });
 
+controlPanelToggle.addEventListener("click", () => {
+  state.controlsCollapsed = !state.controlsCollapsed;
+  syncControlPanelState();
+  scheduleRender();
+});
+
 autoPlayInput.addEventListener("change", () => {
   state.autoPlay = autoPlayInput.checked;
   updateControlLabels();
@@ -746,11 +799,21 @@ autoPlayInput.addEventListener("change", () => {
 state.autoPlay = autoPlayInput.checked;
 state.fontScale = Number.parseInt(fontScaleInput.value, 10) / 100;
 state.heartScale = Number.parseInt(heartScaleInput.value, 10) / 100;
+state.controlsCollapsed = window.matchMedia("(max-width: 720px)").matches;
 updateControlLabels();
+syncControlPanelState();
 
 new ResizeObserver(() => {
   scheduleRender();
 }).observe(surface);
+
+new ResizeObserver(() => {
+  scheduleRender();
+}).observe(surfaceHud);
+
+new ResizeObserver(() => {
+  scheduleRender();
+}).observe(creditFooter);
 
 if ("fonts" in document) {
   void document.fonts.ready.then(() => {
